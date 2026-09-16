@@ -1,0 +1,639 @@
+// QuickStay Database Schema
+// Nepal Short-Stay Accommodation Marketplace
+// Using SQLite for development (migrate to PostgreSQL + PostGIS for production)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// USER & AUTHENTICATION
+// ============================================================
+
+model User {
+  id            String   @id @default(cuid())
+  phone         String?  @unique
+  email         String?  @unique
+  passwordHash  String?
+  role          String   @default("GUEST") // GUEST, HOST, ADMIN
+  status        String   @default("ACTIVE") // ACTIVE, SUSPENDED, DELETED
+  isAdult       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile       UserProfile?
+  host          Host?
+  bookings      Booking[]
+  reviews       Review[]
+  notifications Notification[]
+  sessions      Session[]
+  otpAttempts   OtpAttempt[]
+  auditActions  AuditLog[]     @relation("AuditActor")
+  reports       Report[]       @relation("Reporter")
+  reportsAbout  Report[]       @relation("ReportTarget")
+
+  @@index([phone])
+  @@index([email])
+  @@index([role])
+  @@index([status])
+}
+
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  firstName   String?
+  lastName    String?
+  displayName String?
+  avatarUrl   String?
+  dateOfBirth String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  refreshToken String?  @unique
+  expiresAt    DateTime
+  deviceInfo   String?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model OtpAttempt {
+  id        String   @id @default(cuid())
+  userId    String?
+  target    String // phone or email
+  type      String // PHONE, EMAIL
+  code      String
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([target, type])
+  @@index([expiresAt])
+}
+
+// ============================================================
+// HOST & PROPERTY
+// ============================================================
+
+model Host {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  businessName        String?
+  businessType        String   @default("INDIVIDUAL") // INDIVIDUAL, HOTEL, GUESTHOUSE, PROPERTY_MANAGER
+  panNumber           String?
+  vatNumber           String?
+  bankName            String?
+  bankAccountNumber   String?
+  bankAccountName     String?
+  emergencyContact    String?
+  verificationStatus  String   @default("PENDING") // PENDING, VERIFIED, REJECTED
+  approvalStatus      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedAt          DateTime?
+  approvedBy          String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  properties Property[]
+  payouts    Payout[]
+
+  @@index([verificationStatus])
+  @@index([approvalStatus])
+}
+
+model Property {
+  id                        String   @id @default(cuid())
+  hostId                    String
+  name                      String
+  slug                      String   @unique
+  propertyType              String // HOTEL, GUESTHOUSE, APARTMENT, PRIVATE_ROOM, STUDIO, OTHER
+  description               String
+  address                   String
+  city                      String
+  district                  String?
+  province                  String?
+  latitude                  Float
+  longitude                 Float
+  googlePlaceId             String?
+  locationPrivacy           String   @default("PUBLIC_APPROXIMATE") // PUBLIC_EXACT, PUBLIC_APPROXIMATE, HIDDEN_UNTIL_BOOKED
+  contactPolicy             String?
+  checkInPolicy             String?
+  checkOutPolicy            String?
+  houseRules                String?
+  verificationStatus        String   @default("PENDING") // PENDING, VERIFIED, REJECTED
+  approvalStatus            String   @default("PENDING") // PENDING, APPROVED, REJECTED, SUSPENDED
+  approvedAt                DateTime?
+  approvedBy                String?
+  isActive                  Boolean  @default(true)
+  isDemoData                Boolean  @default(false)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  host              Host              @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  spaces            Space[]
+  photos            PropertyPhoto[]
+  amenities         PropertyAmenity[]
+  reviews           Review[]
+  bookings          Booking[]
+
+  @@index([hostId])
+  @@index([city])
+  @@index([approvalStatus])
+  @@index([latitude, longitude])
+  @@index([slug])
+  @@index([isActive])
+}
+
+model PropertyPhoto {
+  id         String   @id @default(cuid())
+  propertyId String
+  url        String
+  caption    String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model PropertyAmenity {
+  id         String @id @default(cuid())
+  propertyId String
+  amenityId  String
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenity  Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, amenityId])
+}
+
+// ============================================================
+// SPACES (ROOMS)
+// ============================================================
+
+model Space {
+  id               String   @id @default(cuid())
+  propertyId       String
+  name             String
+  slug             String
+  spaceType        String // HOTEL_ROOM, GUEST_ROOM, PRIVATE_ROOM, APARTMENT, STUDIO, MEETING_ROOM, REST_ROOM, SERVICED_ROOM, OTHER
+  description      String
+  capacity         Int      @default(2)
+  minimumDuration  Int      @default(1) // hours
+  maximumDuration  Int      @default(24) // hours
+  cleaningBuffer   Int      @default(30) // minutes
+  selfCheckinEnabled Boolean @default(true)
+  checkinMethod    String   @default("PIN") // PIN, OTP, LOCKBOX, INSTRUCTIONS, QR
+  status           String   @default("ACTIVE") // ACTIVE, INACTIVE, MAINTENANCE
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  property          Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  photos            SpacePhoto[]
+  amenities         SpaceAmenity[]
+  pricingRules      PricingRule[]
+  availabilityRules AvailabilityRule[]
+  availabilityExceptions AvailabilityException[]
+  bookings          Booking[]
+
+  @@unique([propertyId, slug])
+  @@index([propertyId])
+  @@index([spaceType])
+  @@index([status])
+  @@index([isActive])
+}
+
+model SpacePhoto {
+  id        String   @id @default(cuid())
+  spaceId   String
+  url       String
+  caption   String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+}
+
+model SpaceAmenity {
+  id        String @id @default(cuid())
+  spaceId   String
+  amenityId String
+
+  space   Space   @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  amenity Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, amenityId])
+}
+
+// ============================================================
+// AMENITIES
+// ============================================================
+
+model Amenity {
+  id       String @id @default(cuid())
+  name     String @unique
+  icon     String?
+  category String? // BASIC, COMFORT, SAFETY, TECH
+
+  properties PropertyAmenity[]
+  spaces     SpaceAmenity[]
+}
+
+// ============================================================
+// PRICING
+// ============================================================
+
+model PricingRule {
+  id             String   @id @default(cuid())
+  spaceId        String
+  name           String   @default("Standard")
+  ruleType       String   @default("STANDARD") // STANDARD, WEEKEND, PEAK, OFF_PEAK, HOLIDAY
+  pricePerHour   Int // in paisa (smallest currency unit)
+  dayOfWeek      String?  // 0-6 (Sunday-Saturday), comma-separated
+  startTime      String?  // HH:mm
+  endTime        String?  // HH:mm
+  startDate      String?  // YYYY-MM-DD for holiday/seasonal
+  endDate        String?  // YYYY-MM-DD for holiday/seasonal
+  priority       Int      @default(0) // higher = takes precedence
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+  @@index([ruleType])
+  @@index([isActive])
+}
+
+// ============================================================
+// AVAILABILITY
+// ============================================================
+
+model AvailabilityRule {
+  id        String  @id @default(cuid())
+  spaceId   String
+  dayOfWeek Int // 0-6 (Sunday-Saturday)
+  startTime String // HH:mm
+  endTime   String // HH:mm
+  isActive  Boolean @default(true)
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+}
+
+model AvailabilityException {
+  id        String   @id @default(cuid())
+  spaceId   String
+  date      String // YYYY-MM-DD
+  isBlocked Boolean  @default(true) // true = unavailable, false = override availability
+  startTime String?  // HH:mm
+  endTime   String?  // HH:mm
+  reason    String?
+  createdAt DateTime @default(now())
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, date])
+}
+
+// ============================================================
+// BOOKINGS
+// ============================================================
+
+model Booking {
+  id                String   @id @default(cuid())
+  bookingReference  String   @unique @default(cuid())
+  guestId           String
+  propertyId        String
+  spaceId           String
+  startDatetime     DateTime
+  endDatetime       DateTime
+  durationHours     Int
+  basePrice         Int // in paisa
+  taxes             Int      @default(0)
+  serviceFee        Int      @default(0)
+  discount          Int      @default(0)
+  totalAmount       Int // in paisa
+  currency          String   @default("NPR")
+  bookingStatus     String   @default("DRAFT") // DRAFT, PAYMENT_PENDING, PAYMENT_PROCESSING, CONFIRMED, CHECKIN_AVAILABLE, CHECKED_IN, COMPLETED, CANCELLED, EXPIRED, NO_SHOW
+  paymentStatus     String   @default("UNPAID") // UNPAID, PENDING, PAID, FAILED, REFUND_PENDING, REFUNDED, PARTIALLY_REFUNDED
+  cancellationStatus String? // GUEST_CANCELLED, HOST_CANCELLED, ADMIN_CANCELLED, SYSTEM_CANCELLED
+  checkInStatus     String   @default("PENDING") // PENDING, AVAILABLE, CHECKED_IN, CHECKED_OUT
+  guestName         String?
+  guestPhone        String?
+  guestEmail        String?
+  specialRequests   String?
+  holdExpiresAt     DateTime?
+  cancelledAt       DateTime?
+  cancellationReason String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  guest           User              @relation(fields: [guestId], references: [id])
+  property        Property          @relation(fields: [propertyId], references: [id])
+  space           Space             @relation(fields: [spaceId], references: [id])
+  payments        Payment[]
+  checkinCredential CheckinCredential?
+  checkinEvents   CheckinEvent[]
+  review          Review?
+
+  @@index([guestId])
+  @@index([propertyId])
+  @@index([spaceId])
+  @@index([bookingStatus])
+  @@index([paymentStatus])
+  @@index([startDatetime, endDatetime])
+  @@index([holdExpiresAt])
+  @@index([bookingReference])
+}
+
+// ============================================================
+// PAYMENTS
+// ============================================================
+
+model Payment {
+  id                String   @id @default(cuid())
+  bookingId         String
+  provider          String // KHALTI, ESEWA, FONEPAY, MOCK
+  providerTxnId     String?
+  amount            Int // in paisa
+  currency          String   @default("NPR")
+  status            String   @default("INITIATED") // INITIATED, PROCESSING, COMPLETED, FAILED, EXPIRED, REFUND_PENDING, REFUNDED, PARTIALLY_REFUNDED
+  idempotencyKey    String   @unique
+  paymentUrl        String?
+  callbackData      String? // JSON string
+  verifiedAt        DateTime?
+  failureReason     String?
+  metadata          String? // JSON string
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  booking       Booking        @relation(fields: [bookingId], references: [id])
+  events        PaymentEvent[]
+  refunds       Refund[]
+
+  @@index([bookingId])
+  @@index([provider])
+  @@index([status])
+  @@index([providerTxnId])
+}
+
+model PaymentEvent {
+  id        String   @id @default(cuid())
+  paymentId String
+  eventType String // INITIATED, CALLBACK_RECEIVED, VERIFIED, FAILED, WEBHOOK_RECEIVED, REFUND_INITIATED, REFUND_COMPLETED
+  data      String? // JSON string
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([eventType])
+}
+
+model Refund {
+  id             String   @id @default(cuid())
+  paymentId      String
+  amount         Int // in paisa
+  reason         String?
+  status         String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  providerRefundId String?
+  processedAt    DateTime?
+  processedBy    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@index([status])
+}
+
+model Payout {
+  id         String   @id @default(cuid())
+  hostId     String
+  amount     Int // in paisa
+  currency   String   @default("NPR")
+  status     String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  period     String? // e.g. "2024-01" for monthly payouts
+  processedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  host Host @relation(fields: [hostId], references: [id])
+
+  @@index([hostId])
+  @@index([status])
+}
+
+// ============================================================
+// CHECK-IN
+// ============================================================
+
+model CheckinCredential {
+  id              String   @id @default(cuid())
+  bookingId       String   @unique
+  credentialType  String // PIN, OTP, LOCKBOX, QR, INSTRUCTIONS
+  credentialHash  String // hashed credential
+  instructions    String? // plaintext check-in instructions from host
+  activatesAt     DateTime
+  expiresAt       DateTime
+  isUsed          Boolean  @default(false)
+  isInvalidated   Boolean  @default(false)
+  invalidatedBy   String?
+  invalidatedAt   DateTime?
+  createdAt       DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([activatesAt, expiresAt])
+}
+
+model CheckinEvent {
+  id        String   @id @default(cuid())
+  bookingId String
+  eventType String // CREDENTIAL_GENERATED, CREDENTIAL_ACTIVATED, CHECKIN_ATTEMPTED, CHECKIN_SUCCESS, CHECKIN_FAILED, CHECKOUT, CREDENTIAL_EXPIRED, CREDENTIAL_INVALIDATED
+  metadata  String? // JSON string
+  createdAt DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([eventType])
+}
+
+// ============================================================
+// REVIEWS
+// ============================================================
+
+model Review {
+  id              String   @id @default(cuid())
+  bookingId       String   @unique
+  guestId         String
+  propertyId      String
+  rating          Int // 1-5
+  cleanliness     Int? // 1-5
+  accuracy        Int? // 1-5
+  checkinRating   Int? // 1-5
+  location        Int? // 1-5
+  value           Int? // 1-5
+  comment         String?
+  hostResponse    String?
+  hostRespondedAt DateTime?
+  status          String   @default("ACTIVE") // ACTIVE, FLAGGED, REMOVED
+  moderatedBy     String?
+  moderatedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  booking  Booking  @relation(fields: [bookingId], references: [id])
+  guest    User     @relation(fields: [guestId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([propertyId])
+  @@index([guestId])
+  @@index([status])
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String // BOOKING_CONFIRMED, PAYMENT_SUCCESS, CHECKIN_AVAILABLE, etc.
+  title     String
+  message   String
+  data      String? // JSON string with relevant IDs
+  channel   String   @default("IN_APP") // IN_APP, EMAIL, SMS, PUSH
+  isRead    Boolean  @default(false)
+  sentAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([type])
+}
+
+// ============================================================
+// SUPPORT & REPORTING
+// ============================================================
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  userId      String
+  bookingId   String?
+  subject     String
+  description String
+  status      String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  priority    String   @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  assignedTo  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Report {
+  id           String   @id @default(cuid())
+  reporterId   String
+  targetType   String // PROPERTY, USER, REVIEW, BOOKING
+  targetId     String
+  reason       String
+  description  String?
+  status       String   @default("PENDING") // PENDING, REVIEWED, ACTION_TAKEN, DISMISSED
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  actionTaken  String?
+  createdAt    DateTime @default(now())
+
+  reporter   User @relation("Reporter", fields: [reporterId], references: [id])
+  targetUser User? @relation("ReportTarget", fields: [targetId], references: [id])
+
+  @@index([targetType, targetId])
+  @@index([status])
+}
+
+// ============================================================
+// ADMIN & AUDIT
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String // USER_CREATED, PROPERTY_APPROVED, BOOKING_CANCELLED, REFUND_ISSUED, etc.
+  targetType String // USER, PROPERTY, SPACE, BOOKING, PAYMENT, REVIEW, SETTING
+  targetId   String
+  metadata   String? // JSON string
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([action])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+model FraudEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  eventType String // EXCESSIVE_FAILED_PAYMENTS, MULTIPLE_ACCOUNTS, UNUSUAL_VELOCITY, REPEATED_CANCELLATIONS
+  severity  String   @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
+  data      String? // JSON string
+  resolved  Boolean  @default(false)
+  resolvedBy String?
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([severity])
+  @@index([resolved])
+}
+
+// ============================================================
+// PLATFORM SETTINGS
+// ============================================================
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  type      String   @default("STRING") // STRING, NUMBER, BOOLEAN, JSON
+  category  String   @default("GENERAL") // GENERAL, PAYMENT, BOOKING, PRICING, SECURITY
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
