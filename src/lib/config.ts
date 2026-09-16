@@ -1,5 +1,5 @@
 /**
- * QuickStay Platform Configuration
+ * Dayte Platform Configuration
  * All business rules are configurable — never hard-coded.
  */
 
@@ -41,7 +41,7 @@ export const platformConfig = {
   currencySymbol: 'Rs.',
 
   /** Application name */
-  appName: process.env.NEXT_PUBLIC_APP_NAME || 'QuickStay',
+  appName: process.env.NEXT_PUBLIC_APP_NAME || 'Dayte',
 
   /** Application URL */
   appUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',

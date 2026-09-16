@@ -1,5 +1,5 @@
 /**
- * Structured logging for QuickStay
+ * Structured logging for Dayte
  * In production, integrate with Sentry/OpenTelemetry/cloud logging.
  */
 

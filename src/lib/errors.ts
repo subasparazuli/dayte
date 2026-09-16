@@ -1,5 +1,5 @@
 /**
- * User-friendly error handling for QuickStay
+ * User-friendly error handling for Dayte
  * Never expose stack traces, SQL errors, or internal identifiers to users.
  */
 
@@ -96,7 +96,7 @@ export function errorResponse(error: unknown): Response {
   }
 
   // Log the actual error server-side
-  console.error('[QuickStay Error]', error);
+  console.error('[Dayte Error]', error);
 
   // Return a generic error to the client
   return Response.json(

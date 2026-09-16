@@ -24,7 +24,7 @@ export default function RegisterPage() {
     <Card className="shadow-2xl border-0">
       <CardHeader className="space-y-1">
         <CardTitle className="text-2xl text-center font-bold">Create an account</CardTitle>
-        <p className="text-sm text-gray-500 text-center">Join QuickStay today</p>
+        <p className="text-sm text-gray-500 text-center">Join Dayte today</p>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleRegister} className="space-y-4">

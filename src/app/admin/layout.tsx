@@ -10,7 +10,7 @@ export default function AdminLayout({
     <div className="min-h-screen bg-gray-100 flex">
       {/* Admin Sidebar */}
       <aside className="w-64 bg-gray-900 text-gray-300 min-h-screen p-4 flex flex-col">
-        <div className="text-white font-bold text-xl mb-8 pl-2">QuickStay Admin</div>
+        <div className="text-white font-bold text-xl mb-8 pl-2">Dayte Admin</div>
         <nav className="space-y-2 flex-1">
           <Link href="/admin" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-gray-800 text-white">
             <LayoutDashboard className="w-5 h-5" /> Dashboard

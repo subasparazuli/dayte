@@ -51,7 +51,7 @@ export default function Home() {
       {/* How it works */}
       <section className="py-16 md:py-24 bg-white">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-12">How QuickStay Works</h2>
+          <h2 className="text-3xl font-bold text-gray-900 mb-12">How Dayte Works</h2>
           <HowItWorks />
         </div>
       </section>

@@ -8,11 +8,11 @@ import { Footer } from '@/components/layout/footer'
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 
 export const metadata: Metadata = {
-  title: 'QuickStay — Book a private short stay, by the hour',
-  description: 'Premium hourly short-stay accommodation marketplace in Nepal. Find hotels, guest rooms & private spaces.',
+  title: 'Dayte — Your date for the day, privacy ensured',
+  description: 'Dayte — Your date for the day, privacy ensured. Premium hourly short-stay accommodation in Nepal. Find hotels, guest rooms & private spaces.',
   openGraph: {
-    title: 'QuickStay',
-    description: 'Book private stays by the hour in Nepal.',
+    title: 'Dayte',
+    description: 'Your date for the day, privacy ensured. Book private stays by the hour in Nepal.',
     type: 'website',
   },
 }
